@@ -3,20 +3,17 @@ import sys
 
 sys.path.append("python/")
 
-import metrics
+import python.metrics as metrics
 import numpy as np
-from data import Dataloader
-from models import HeuristicModel, TwoClustersMIP
+from python.data import Dataloader
+from python.models import HeuristicModel, TwoClustersMIP
 
 if __name__ == "__main__":  
     print("Starting Python script for evaluation")
-    print("Path to data is:", sys.argv[1])
-    path_to_data = sys.argv[1]
-    print(os.listdir(path_to_data))
 
     print("MIP Model - dataset_4:")
     ### First part: test of the MIP model
-    data_loader = Dataloader(os.path.join(path_to_data, "dataset_4"))  # Path to test dataset
+    data_loader = Dataloader("data/dataset_4")  # Path to test dataset
 
     X, Y = data_loader.load()
 
@@ -38,7 +35,7 @@ if __name__ == "__main__":
 
     print("Heuristic Model - dataset_10:")
     ### 2nd part: test of the heuristic model
-    data_loader = Dataloader(os.path.join(path_to_data, "dataset_10"))  # Path to test dataset
+    data_loader = Dataloader("data/dataset_10")  # Path to test dataset
     X, Y = data_loader.load()
 
     np.random.seed(123)
@@ -49,7 +46,7 @@ if __name__ == "__main__":
 
     X_train = X[train_indexes]
     Y_train = Y[train_indexes]
-    model = HeuristicModel(n_clusters=3)
+    model = HeuristicModel(n_clusters=3,n_pieces=5,n_criteria=10)
     model.fit(X_train, Y_train)
 
     X_test = X[test_indexes]

@@ -1,6 +1,6 @@
 import pickle
 from abc import abstractmethod
-
+from sklearn.cluster import KMeans
 import numpy as np
 from gurobipy import *
 
@@ -316,16 +316,24 @@ class HeuristicModel(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self):
+    
+    def __init__(self, n_pieces, n_clusters, n_criteria, P=20000):
         """Initialization of the Heuristic Model.
         """
         self.seed = 123
-        self.models = self.instantiate()
+        self.L = n_pieces
+        self.K = n_clusters
+        self.n = n_criteria
+        self.P = P
+        self.kmeans, self.models = self.instantiate()
 
+    
     def instantiate(self):
         """Instantiation of the MIP Variables"""
         # To be completed
-        return
+        kmeans = KMeans(n_clusters=self.K, random_state=self.seed)
+        models = [TwoClustersMIP(self.L, n_clusters=1,n_criteria=self.n,n_pairs=2000) for k in range(self.K)]
+        return kmeans, models
 
     def fit(self, X, Y):
         """Estimation of the parameters - To be completed.
@@ -338,7 +346,17 @@ class HeuristicModel(BaseModel):
             (n_samples, n_features) features of unchosen elements
         """
         # To be completed
-        return
+        pairs=X-Y
+        self.kmeans.fit(pairs)
+        self.clusters = self.kmeans.cluster_centers_
+        self.labels = self.kmeans.labels_
+        self.models = [TwoClustersMIP(self.L, n_clusters=1,n_criteria=self.n,n_pairs=2000) for i in range(self.K)]
+        for k in range(self.K):
+            indexes = np.where(self.labels == k)[0]
+            X_k = X[indexes]
+            Y_k = Y[indexes]
+            self.models[k].fit(X_k, Y_k)
+        return self
 
     def predict_utility(self, X):
         """Return Decision Function of the MIP for X. - To be completed.
@@ -355,4 +373,6 @@ class HeuristicModel(BaseModel):
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        return
+        U = [self.models[k].predict_utility(X) for k in range(self.K)]
+        U = np.concatenate(U, axis=1)
+        return U
