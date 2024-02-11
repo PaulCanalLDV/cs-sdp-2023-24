@@ -25,7 +25,7 @@ The command
 ```bash
 conda env create -f config/env.yml
 conda activate cs_td
-python evaluation.py
+python evaluation.py <path_to_data>
 ``````
 will be used for evaluation, with two other test datasets. Make sure that it works well.
 
