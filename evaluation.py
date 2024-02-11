@@ -21,7 +21,7 @@ if __name__ == "__main__":
     X, Y = data_loader.load()
 
     model = TwoClustersMIP(
-        n_clusters=2, n_pieces=5
+        n_clusters=2, n_pieces=5, n_criteria=4, n_pairs=2000
     )  # You can add your model's arguments here, the best would be set up the right ones as default.
     model.fit(X, Y)
 
