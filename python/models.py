@@ -181,6 +181,10 @@ class TwoClustersMIP(BaseModel):
             Number of pieces for the utility function of each feature.
         n_clusters: int
             Number of clusters to implement in the MIP.
+        n_criteria: int
+            Number of criteria for each product
+        n_pairs: int
+            Number of pairs of comparison
         """
         self.seed = 123
         self.n_pieces = n_pieces # L
@@ -229,7 +233,7 @@ class TwoClustersMIP(BaseModel):
         return score
 
     def fit(self, X, Y):
-        """Estimation of the parameters - To be completed.
+        """Estimation of the parameters - Completed!
 
         Parameters
         ----------
@@ -238,8 +242,6 @@ class TwoClustersMIP(BaseModel):
         Y: np.ndarray
             (n_samples, n_features) features of unchosen elements
         """
-
-        # To be completed
 
         # Constraint n°1: Constraint on the errors for each pair
 
