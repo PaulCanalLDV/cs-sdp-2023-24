@@ -2,6 +2,7 @@ import pickle
 from abc import abstractmethod
 
 import numpy as np
+from gurobipy import *
 
 
 class BaseModel(object):
@@ -171,7 +172,7 @@ class TwoClustersMIP(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self, n_pieces, n_clusters):
+    def __init__(self, n_pieces, n_clusters, n_criteria, n_pairs):
         """Initialization of the MIP Variables
 
         Parameters
@@ -182,12 +183,50 @@ class TwoClustersMIP(BaseModel):
             Number of clusters to implement in the MIP.
         """
         self.seed = 123
+        self.n_pieces = n_pieces # L
+        self.n_clusters = n_clusters # K
+        self.n_criteria = n_criteria # n
+        self.n_pairs = n_pairs # P
+        self.epsilon = 10**-5
+        self.M = 5
         self.model = self.instantiate()
 
     def instantiate(self):
-        """Instantiation of the MIP Variables - To be completed."""
-        # To be completed
-        return
+        """Instantiation of the MIP Variables - Completed!"""
+
+        model = Model("TwoClustersMIP")
+
+        # The values of each breakpoint in our function ((L + 1) * n * K)
+        self.weights = [[[model.addVar(name=f"s_{k}_{i}_{l}", vtype=GRB.CONTINUOUS, lb=0, ub=1) for l in range(self.n_pieces+1)] for i in range(self.n_criteria)] for k in range(self.n_clusters)]# liste de poids, par clusters, par critères, par morceaux
+
+        # The overestimation and underestimation errors sigma_x+/sigma_y+ and sigma_x-/sigma_y-, made for every pair
+        self.sigma_x_plus = [model.addVar(name=f"sigma_x+_{j}", vtype=GRB.CONTINUOUS) for j in range(self.n_pairs)]
+        self.sigma_x_minus = [model.addVar(name=f"sigma_x-_{j}", vtype=GRB.CONTINUOUS) for j in range(self.n_pairs)]
+        self.sigma_y_plus = [model.addVar(name=f"sigma_y+_{j}", vtype=GRB.CONTINUOUS) for j in range(self.n_pairs)]
+        self.sigma_y_minus = [model.addVar(name=f"sigma_y-_{j}", vtype=GRB.CONTINUOUS) for j in range(self.n_pairs)]
+
+        # The binary variables, to caracterise the fact that x > y
+        self.preferences = [[model.addVar(name=f"preferences_{j}_{k}", vtype=GRB.BINARY) for k in range(self.n_clusters)] for j in range(self.n_pairs)]
+
+        model.update()
+
+        return model
+
+    def score(self, x, k, constraint=True):
+        value = (lambda x: x) if constraint else (lambda x: x.X) # to get constraint or to get the value after the model have been optimised
+        score = 0
+        max = 1 # we make the assumption that the maximum value for x is 1
+
+        for i in range(self.n_criteria):
+            if x[i] == max:
+                score += self.weights[k][i][-1] # if the value of x for criteria i is the maximum, we get the last value directly
+            else:
+                l = int(x[i] * self.n_pieces)
+                x_l = l / self.n_pieces
+                x_l_plus_1 = (l + 1) / self.n_pieces
+                score += value(self.weights[k][i][l]) + ((x[i] - x_l) / (x_l_plus_1 - x_l)) * (value(self.weights[k][i][l+1]) - value(self.weights[k][i][l]))
+
+        return score
 
     def fit(self, X, Y):
         """Estimation of the parameters - To be completed.
@@ -201,10 +240,60 @@ class TwoClustersMIP(BaseModel):
         """
 
         # To be completed
-        return
+
+        # Constraint n°1: Constraint on the errors for each pair
+
+        for j in range(self.n_pairs):
+            x = X[j]
+            y = Y[j]
+            for k in range(self.n_clusters):
+                score_x = self.score(x, k)
+                score_y = self.score(y, k)
+                self.model.addConstr((1 - self.preferences[j][k]) * self.M + score_x - self.sigma_x_plus[j] + self.sigma_x_minus[j] >= score_y - self.sigma_y_plus[j] + self.sigma_y_minus[j] + self.epsilon)
+
+        # Constraint n°2: Monotony of functions
+                
+        for k in range(self.n_clusters):
+            for i in range(self.n_criteria):
+                for l in range(self.n_pieces):
+                    self.model.addConstr(self.weights[k][i][l+1] >= self.weights[k][i][l])
+
+        # Constraint n°3: Each function begins at 0
+                    
+        for k in range(self.n_clusters):
+            for i in range(self.n_criteria):
+                self.model.addConstr(self.weights[k][i][0] == 0)
+
+        # Constraint n°4: Normalisation
+                
+        for k in range(self.n_clusters):
+            self.model.addConstr(quicksum([self.weights[k][i][self.n_pieces] for i in range(self.n_criteria)]) == 1)
+
+        # Constraint n°5: At least one cluster have the preference
+        
+        for j in range(self.n_pairs):
+            self.model.addConstr(quicksum(self.preferences[j]) >= 1)
+
+
+        # Objective function
+            
+        self.model.setObjective(quicksum(self.sigma_x_plus) + quicksum(self.sigma_x_minus) + quicksum(self.sigma_y_plus) + quicksum(self.sigma_y_minus), GRB.MINIMIZE)
+
+        # Let's optimise!
+
+        self.model.optimize()
+
+        if self.model.Status == GRB.INFEASIBLE:
+            print("Pas de solution...")
+        elif self.model.Status == GRB.UNBOUNDED:
+            print("Non borné")
+        else:
+            print("Solution trouvée !")
+
+        return self
 
     def predict_utility(self, X):
-        """Return Decision Function of the MIP for X. - To be completed.
+        """Return Decision Function of the MIP for X. - Completed!
 
         Parameters:
         -----------
@@ -216,9 +305,10 @@ class TwoClustersMIP(BaseModel):
         np.ndarray:
             (n_samples, n_clusters) array of decision function value for each cluster.
         """
-        # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        return
+        results = [[self.score(x, k, constraint=False) for k in range(self.n_clusters)] for x in X] # For each value of X we compute the score according to each cluster
+
+        return np.array(results)
 
 
 class HeuristicModel(BaseModel):
