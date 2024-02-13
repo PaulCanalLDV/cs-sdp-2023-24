@@ -191,7 +191,7 @@ class TwoClustersMIP(BaseModel):
         self.n_clusters = n_clusters # K
         self.n_criteria = n_criteria # n
         self.n_pairs = n_pairs # P
-        self.epsilon = 10**-10
+        self.epsilon = 10**-5
         self.M = 5
         self.model = self.instantiate()
 
